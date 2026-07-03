@@ -28,10 +28,8 @@
 	let isDragging = $state(false);
 	let fileInput = $state<HTMLInputElement | null>(null);
 
-	let pressureChartCanvas = $state<HTMLCanvasElement | null>(null);
 	let tempChartCanvas = $state<HTMLCanvasElement | null>(null);
-	let depthChartCanvas = $state<HTMLCanvasElement | null>(null);
-	let diverTempCanvas = $state<HTMLCanvasElement | null>(null);
+	let ptdChartCanvas = $state<HTMLCanvasElement | null>(null); // pressure + depth
 
 	let showPtdReview = $state(false);
 
@@ -69,16 +67,8 @@
 		};
 	});
 
-	let tempStats = $derived.by(() => {
-		const vals = data.temperatureRecords
-			.map((r) => r.temperatureCelsius)
-			.filter((v): v is number => v != null);
-		return { total: data.temperatureRecords.length, temperature: calcStats(vals) };
-	});
-
 	$effect(() => {
-		if (!pressureChartCanvas || !tempChartCanvas || !depthChartCanvas || !data.ptdRecords.length)
-			return;
+		if (!tempChartCanvas || !ptdChartCanvas || !data.ptdRecords.length) return;
 
 		const toMs = (r: (typeof data.ptdRecords)[0]) =>
 			r.timestamp ? new Date(r.timestamp).getTime() : null;
@@ -121,6 +111,7 @@
 				options: {
 					animation: false,
 					responsive: true,
+					maintainAspectRatio: false,
 					plugins: {
 						legend: { display: false },
 						tooltip: {
@@ -142,13 +133,6 @@
 			});
 		}
 
-		const pChart = makeChart(
-			pressureChartCanvas,
-			'Pressure',
-			'#13294B',
-			(r) => r.pressure,
-			'Pressure (psi)'
-		);
 		const tChart = makeChart(
 			tempChartCanvas,
 			'Temperature',
@@ -156,68 +140,13 @@
 			(r) => r.temperature,
 			'Temperature (°C)'
 		);
-		const dChart = makeChart(depthChartCanvas, 'Depth', '#1f7a4f', (r) => r.depth, 'Depth (m)');
+
+		const dChart = makeChart(ptdChartCanvas, 'Depth', '#1f7a4f', (r) => r.depth, 'Depth (m)');
 
 		return () => {
-			pChart.destroy();
 			tChart.destroy();
 			dChart.destroy();
 		};
-	});
-
-	$effect(() => {
-		if (!diverTempCanvas || !data.temperatureRecords.length) return;
-
-		const chartData = data.temperatureRecords
-			.filter((r) => r.datetime != null && r.temperatureCelsius != null)
-			.map((r) => ({ x: new Date(r.datetime!).getTime(), y: r.temperatureCelsius as number }));
-
-		const chart = new Chart(diverTempCanvas, {
-			type: 'scatter',
-			data: {
-				datasets: [
-					{
-						label: 'Temperature (°C)',
-						data: chartData,
-						borderColor: '#E84A27',
-						backgroundColor: '#E84A2733',
-						pointRadius: chartData.length > 500 ? 1 : 3,
-						showLine: true,
-						borderWidth: 1.5
-					}
-				]
-			},
-			options: {
-				animation: false,
-				responsive: true,
-				plugins: {
-					legend: { display: false },
-					tooltip: {
-						callbacks: {
-							label: (ctx) =>
-								`${new Date(ctx.parsed.x!).toLocaleString()}: ${ctx.parsed.y!.toFixed(2)} °C`
-						}
-					}
-				},
-				scales: {
-					x: {
-						title: { display: true, text: 'Time', color: '#707372' },
-						ticks: {
-							color: '#707372',
-							callback: (val) => new Date(val as number).toLocaleDateString()
-						},
-						grid: { color: '#E8E9EB' }
-					},
-					y: {
-						title: { display: true, text: 'Temperature (°C)', color: '#707372' },
-						ticks: { color: '#707372' },
-						grid: { color: '#E8E9EB' }
-					}
-				}
-			}
-		});
-
-		return () => chart.destroy();
 	});
 
 	function addFiles(incoming: FileList | File[]) {
@@ -504,20 +433,16 @@
 		</div>
 
 		<!-- Time-series charts -->
-		<div class="flex flex-wrap gap-4">
-			<div class="flex-1 min-w-60 border border-il-cloud rounded p-3 bg-white">
-				<div class="font-heading font-semibold text-il-blue text-sm mb-2">Pressure over Time</div>
-				<canvas bind:this={pressureChartCanvas}></canvas>
-			</div>
-			<div class="flex-1 min-w-60 border border-il-cloud rounded p-3 bg-white">
+		<div class="flex flex-col gap-4">
+			<div class="border border-il-cloud rounded p-3 bg-white">
 				<div class="font-heading font-semibold text-il-blue text-sm mb-2">
 					Temperature over Time
 				</div>
-				<canvas bind:this={tempChartCanvas}></canvas>
+				<div class="h-80"><canvas bind:this={tempChartCanvas}></canvas></div>
 			</div>
-			<div class="flex-1 min-w-60 border border-il-cloud rounded p-3 bg-white">
+			<div class="border border-il-cloud rounded p-3 bg-white">
 				<div class="font-heading font-semibold text-il-blue text-sm mb-2">Depth over Time</div>
-				<canvas bind:this={depthChartCanvas}></canvas>
+				<div class="h-80"><canvas bind:this={ptdChartCanvas}></canvas></div>
 			</div>
 		</div>
 	</div>
@@ -526,51 +451,6 @@
 {#if showPtdReview}
 	<div transition:fly={{ y: '100%', duration: 300 }} class="fixed inset-0 z-50">
 		<PtdReviewPanel records={data.ptdRecords} onclose={() => (showPtdReview = false)} />
-	</div>
-{/if}
-
-<!-- Temperature section -->
-{#if data.temperatureRecords.length > 0}
-	<div class="mb-8">
-		<h2 class="font-heading font-bold text-xl text-il-blue mb-4">Temperatures</h2>
-
-		<!-- Summary statistics -->
-		<div class="grid grid-cols-1 gap-4 max-w-xs mb-4">
-			<div class="border border-il-cloud rounded p-4 bg-il-storm-95">
-				<div class="font-heading font-semibold text-il-blue text-sm mb-2">Temperature (°C)</div>
-				<div class="text-xs font-sans text-il-storm space-y-1">
-					<div class="flex justify-between">
-						<span>Records</span>
-						<span class="font-semibold text-il-storm-30">{tempStats.temperature?.count ?? '—'}</span
-						>
-					</div>
-					<div class="flex justify-between">
-						<span>Min</span>
-						<span class="font-semibold text-il-storm-30"
-							>{tempStats.temperature ? tempStats.temperature.min.toFixed(2) : '—'}</span
-						>
-					</div>
-					<div class="flex justify-between">
-						<span>Max</span>
-						<span class="font-semibold text-il-storm-30"
-							>{tempStats.temperature ? tempStats.temperature.max.toFixed(2) : '—'}</span
-						>
-					</div>
-					<div class="flex justify-between">
-						<span>Mean</span>
-						<span class="font-semibold text-il-storm-30"
-							>{tempStats.temperature ? tempStats.temperature.mean.toFixed(2) : '—'}</span
-						>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Time-series chart -->
-		<div class="border border-il-cloud rounded p-3 bg-white">
-			<div class="font-heading font-semibold text-il-blue text-sm mb-2">Temperature over Time</div>
-			<canvas bind:this={diverTempCanvas}></canvas>
-		</div>
 	</div>
 {/if}
 

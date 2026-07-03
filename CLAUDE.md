@@ -3,7 +3,7 @@ If you make a commit, follow conventional commits and add a trailer:
 (like ClaudeCode), and `<model>` is the AI model (Like claude-opus-4.8). You
 don't need to add a coauthored-by Claude when you have this.
 
-
+The development database is hosted in docker-compose with node ports. Run npm db:push with the following env var `DATABASE_URL=postgresql://idot:idot@localhost:5432/idot`
 You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
 
 ## Available Svelte MCP Tools:

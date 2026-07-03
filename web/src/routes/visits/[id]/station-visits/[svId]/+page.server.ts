@@ -7,7 +7,6 @@ import {
 	lutStatus,
 	stationVisitImportQueue,
 	pressureTemperatureDepth,
-	temperatures,
 	samples
 } from '$lib/server/schema';
 import { eq, asc, and, inArray, isNull } from 'drizzle-orm';
@@ -20,68 +19,53 @@ export const load: PageServerLoad = async ({ params }) => {
 	const svId = parseInt(params.svId);
 	if (isNaN(visitId) || isNaN(svId)) throw error(404, 'Not found');
 
-	const [visitRows, svRows, statuses, ptdRows, tempRows, sampleRows, availableBottles] =
-		await Promise.all([
-			db
-				.select({ id: visits.id, dt: visits.dt })
-				.from(visits)
-				.where(eq(visits.id, visitId))
-				.limit(1),
-			db
-				.select({
-					id: stationVisits.id,
-					stationId: stationVisits.stationId,
-					staName: stations.staName,
-					code: stations.code,
-					time: stationVisits.time,
-					levelMeters: stationVisits.levelMeters,
-					levelFeet: stationVisits.levelFeet,
-					shortType: lutStationType.shortType,
-					statusId: stationVisits.statusId,
-					status: lutStatus.status,
-					notes: stationVisits.notes
-				})
-				.from(stationVisits)
-				.leftJoin(stations, eq(stationVisits.stationId, stations.id))
-				.leftJoin(lutStationType, eq(stations.typeId, lutStationType.id))
-				.leftJoin(lutStatus, eq(stationVisits.statusId, lutStatus.id))
-				.where(eq(stationVisits.id, svId))
-				.limit(1),
-			db.select().from(lutStatus).orderBy(lutStatus.status),
-			db
-				.select({
-					id: pressureTemperatureDepth.id,
-					stationVisitId: pressureTemperatureDepth.stationVisitId,
-					timestamp: pressureTemperatureDepth.timestamp,
-					pressure: pressureTemperatureDepth.pressure,
-					temperature: pressureTemperatureDepth.temperature,
-					depth: pressureTemperatureDepth.depth,
-					includeInReport: pressureTemperatureDepth.includeInReport
-				})
-				.from(pressureTemperatureDepth)
-				.where(eq(pressureTemperatureDepth.stationVisitId, svId))
-				.orderBy(asc(pressureTemperatureDepth.timestamp)),
-			db
-				.select({
-					id: temperatures.id,
-					stationVisitId: temperatures.stationVisitId,
-					datetime: temperatures.datetime,
-					temperatureCelsius: temperatures.temperatureCelsius
-				})
-				.from(temperatures)
-				.where(eq(temperatures.stationVisitId, svId))
-				.orderBy(asc(temperatures.datetime)),
-			db
-				.select()
-				.from(samples)
-				.where(eq(samples.stationVisitId, svId))
-				.orderBy(asc(samples.sampleName)),
-			db
-				.select({ id: samples.id, sampleName: samples.sampleName })
-				.from(samples)
-				.where(and(eq(samples.visitId, visitId), isNull(samples.stationVisitId)))
-				.orderBy(asc(samples.sampleName))
-		]);
+	const [visitRows, svRows, statuses, ptdRows, sampleRows, availableBottles] = await Promise.all([
+		db.select({ id: visits.id, dt: visits.dt }).from(visits).where(eq(visits.id, visitId)).limit(1),
+		db
+			.select({
+				id: stationVisits.id,
+				stationId: stationVisits.stationId,
+				staName: stations.staName,
+				code: stations.code,
+				time: stationVisits.time,
+				levelMeters: stationVisits.levelMeters,
+				levelFeet: stationVisits.levelFeet,
+				shortType: lutStationType.shortType,
+				statusId: stationVisits.statusId,
+				status: lutStatus.status,
+				notes: stationVisits.notes
+			})
+			.from(stationVisits)
+			.leftJoin(stations, eq(stationVisits.stationId, stations.id))
+			.leftJoin(lutStationType, eq(stations.typeId, lutStationType.id))
+			.leftJoin(lutStatus, eq(stationVisits.statusId, lutStatus.id))
+			.where(eq(stationVisits.id, svId))
+			.limit(1),
+		db.select().from(lutStatus).orderBy(lutStatus.status),
+		db
+			.select({
+				id: pressureTemperatureDepth.id,
+				stationVisitId: pressureTemperatureDepth.stationVisitId,
+				timestamp: pressureTemperatureDepth.timestamp,
+				pressure: pressureTemperatureDepth.pressure,
+				temperature: pressureTemperatureDepth.temperature,
+				depth: pressureTemperatureDepth.depth,
+				includeInReport: pressureTemperatureDepth.includeInReport
+			})
+			.from(pressureTemperatureDepth)
+			.where(eq(pressureTemperatureDepth.stationVisitId, svId))
+			.orderBy(asc(pressureTemperatureDepth.timestamp)),
+		db
+			.select()
+			.from(samples)
+			.where(eq(samples.stationVisitId, svId))
+			.orderBy(asc(samples.sampleName)),
+		db
+			.select({ id: samples.id, sampleName: samples.sampleName })
+			.from(samples)
+			.where(and(eq(samples.visitId, visitId), isNull(samples.stationVisitId)))
+			.orderBy(asc(samples.sampleName))
+	]);
 
 	if (visitRows.length === 0) throw error(404, 'Visit not found');
 	if (svRows.length === 0) throw error(404, 'Station visit not found');
@@ -91,7 +75,6 @@ export const load: PageServerLoad = async ({ params }) => {
 		stationVisit: svRows[0],
 		statuses,
 		ptdRecords: ptdRows,
-		temperatureRecords: tempRows,
 		samples: sampleRows,
 		availableBottles
 	};
