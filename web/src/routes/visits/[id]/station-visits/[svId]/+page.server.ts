@@ -50,6 +50,7 @@ export const load: PageServerLoad = async ({ params }) => {
 				pressure: pressureTemperatureDepth.pressure,
 				temperature: pressureTemperatureDepth.temperature,
 				depth: pressureTemperatureDepth.depth,
+				barometricPressure: pressureTemperatureDepth.barometricPressure,
 				includeInReport: pressureTemperatureDepth.includeInReport
 			})
 			.from(pressureTemperatureDepth)

@@ -12,10 +12,15 @@
 		pressure: number | null;
 		temperature: number | null;
 		depth: number | null;
+		barometricPressure: number | null;
 		includeInReport: boolean;
 	};
 
-	let { records, onclose }: { records: PtdRecord[]; onclose: () => void } = $props();
+	let {
+		records,
+		isBar = false,
+		onclose
+	}: { records: PtdRecord[]; isBar?: boolean; onclose: () => void } = $props();
 
 	// One-time initialization from DB state — untrack signals this is intentional
 	let excludedIds = $state<Set<number>>(
@@ -148,22 +153,24 @@
 				class="border border-il-cloud rounded px-2 py-1 text-sm font-sans text-il-storm-30 bg-white focus:outline-none focus:ring-2 focus:ring-il-blue w-32"
 			/>
 		</div>
-		<div class="flex flex-col gap-1">
-			<label
-				for="ptd-filter-depth"
-				class="text-xs font-semibold font-sans text-il-storm uppercase tracking-wide"
-			>
-				Max Depth (m)
-			</label>
-			<input
-				id="ptd-filter-depth"
-				type="number"
-				step="any"
-				placeholder="e.g. 0"
-				bind:value={maxDepth}
-				class="border border-il-cloud rounded px-2 py-1 text-sm font-sans text-il-storm-30 bg-white focus:outline-none focus:ring-2 focus:ring-il-blue w-32"
-			/>
-		</div>
+		{#if !isBar}
+			<div class="flex flex-col gap-1">
+				<label
+					for="ptd-filter-depth"
+					class="text-xs font-semibold font-sans text-il-storm uppercase tracking-wide"
+				>
+					Max Depth (m)
+				</label>
+				<input
+					id="ptd-filter-depth"
+					type="number"
+					step="any"
+					placeholder="e.g. 0"
+					bind:value={maxDepth}
+					class="border border-il-cloud rounded px-2 py-1 text-sm font-sans text-il-storm-30 bg-white focus:outline-none focus:ring-2 focus:ring-il-blue w-32"
+				/>
+			</div>
+		{/if}
 		<div class="flex items-end gap-2 pb-0.5">
 			<button
 				type="button"
@@ -187,15 +194,22 @@
 
 	<!-- Table header -->
 	<div
-		class="grid grid-cols-[40px_1fr_1fr_1fr_1fr] bg-il-blue text-white text-xs font-heading font-semibold tracking-wide shrink-0"
+		class="grid {isBar
+			? 'grid-cols-[40px_1fr_1fr_1fr]'
+			: 'grid-cols-[40px_1fr_1fr_1fr_1fr]'} bg-il-blue text-white text-xs font-heading font-semibold tracking-wide shrink-0"
 	>
 		<div class="px-3 py-2 flex items-center justify-center">
 			<span class="sr-only">Include</span>
 		</div>
 		<div class="px-3 py-2">Time</div>
-		<div class="px-3 py-2">Pressure</div>
-		<div class="px-3 py-2">Temperature (°C)</div>
-		<div class="px-3 py-2">Depth (m)</div>
+		{#if isBar}
+			<div class="px-3 py-2">Barometric Pressure (PSI)</div>
+			<div class="px-3 py-2">Temperature (°C)</div>
+		{:else}
+			<div class="px-3 py-2">Pressure</div>
+			<div class="px-3 py-2">Temperature (°C)</div>
+			<div class="px-3 py-2">Depth (m)</div>
+		{/if}
 	</div>
 
 	<!-- Virtualized body -->
@@ -209,7 +223,9 @@
 						style:top="{vRow.start}px"
 						style:height="{vRow.size}px"
 						style:width="100%"
-						class="grid grid-cols-[40px_1fr_1fr_1fr_1fr] border-b border-il-cloud items-center
+						class="grid {isBar
+							? 'grid-cols-[40px_1fr_1fr_1fr]'
+							: 'grid-cols-[40px_1fr_1fr_1fr_1fr]'} border-b border-il-cloud items-center
 						{excludedIds.has(row.id)
 							? 'opacity-50 bg-il-storm-95'
 							: vRow.index % 2 === 0
@@ -237,27 +253,44 @@
 						>
 							{fmtTime(row.timestamp)}
 						</div>
-						<div
-							class="px-3 text-sm font-sans text-il-storm-30 {excludedIds.has(row.id)
-								? 'line-through'
-								: ''}"
-						>
-							{fmt(row.pressure)}
-						</div>
-						<div
-							class="px-3 text-sm font-sans text-il-storm-30 {excludedIds.has(row.id)
-								? 'line-through'
-								: ''}"
-						>
-							{fmt(row.temperature)}
-						</div>
-						<div
-							class="px-3 text-sm font-sans text-il-storm-30 {excludedIds.has(row.id)
-								? 'line-through'
-								: ''}"
-						>
-							{fmt(row.depth)}
-						</div>
+						{#if isBar}
+							<div
+								class="px-3 text-sm font-sans text-il-storm-30 {excludedIds.has(row.id)
+									? 'line-through'
+									: ''}"
+							>
+								{fmt(row.barometricPressure)}
+							</div>
+							<div
+								class="px-3 text-sm font-sans text-il-storm-30 {excludedIds.has(row.id)
+									? 'line-through'
+									: ''}"
+							>
+								{fmt(row.temperature)}
+							</div>
+						{:else}
+							<div
+								class="px-3 text-sm font-sans text-il-storm-30 {excludedIds.has(row.id)
+									? 'line-through'
+									: ''}"
+							>
+								{fmt(row.pressure)}
+							</div>
+							<div
+								class="px-3 text-sm font-sans text-il-storm-30 {excludedIds.has(row.id)
+									? 'line-through'
+									: ''}"
+							>
+								{fmt(row.temperature)}
+							</div>
+							<div
+								class="px-3 text-sm font-sans text-il-storm-30 {excludedIds.has(row.id)
+									? 'line-through'
+									: ''}"
+							>
+								{fmt(row.depth)}
+							</div>
+						{/if}
 					</div>
 				{/if}
 			{/each}

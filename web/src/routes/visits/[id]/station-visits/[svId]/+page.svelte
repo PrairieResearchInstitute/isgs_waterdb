@@ -40,6 +40,10 @@
 	let isGW = $derived(data.stationVisit.shortType === 'GW');
 	let activeLevel = $derived(isGW ? data.stationVisit.levelMeters : data.stationVisit.levelFeet);
 
+	// BaroTROLL (BAR) stations only record temperature and barometric pressure;
+	// pressure and depth are NULL, so those displays are replaced by barometric pressure.
+	let isBar = $derived(data.stationVisit.shortType === 'BAR');
+
 	// Status is required only when Level is blank. `levelEdited` starts null and the derived
 	// falls back to the loaded value so an existing record with a level isn't flagged on load.
 	let levelEdited = $state<string | null>(null);
@@ -59,11 +63,15 @@
 		const depths = data.ptdRecords.map((r) => r.depth).filter((v): v is number => v != null);
 		const pressures = data.ptdRecords.map((r) => r.pressure).filter((v): v is number => v != null);
 		const temps = data.ptdRecords.map((r) => r.temperature).filter((v): v is number => v != null);
+		const baros = data.ptdRecords
+			.map((r) => r.barometricPressure)
+			.filter((v): v is number => v != null);
 		return {
 			total: data.ptdRecords.length,
 			depth: calcStats(depths),
 			pressure: calcStats(pressures),
-			temperature: calcStats(temps)
+			temperature: calcStats(temps),
+			barometricPressure: calcStats(baros)
 		};
 	});
 
@@ -141,7 +149,15 @@
 			'Temperature (°C)'
 		);
 
-		const dChart = makeChart(ptdChartCanvas, 'Depth', '#1f7a4f', (r) => r.depth, 'Depth (m)');
+		const dChart = isBar
+			? makeChart(
+					ptdChartCanvas,
+					'Barometric Pressure',
+					'#1f7a4f',
+					(r) => r.barometricPressure,
+					'Barometric Pressure (PSI)'
+				)
+			: makeChart(ptdChartCanvas, 'Depth', '#1f7a4f', (r) => r.depth, 'Depth (m)');
 
 		return () => {
 			tChart.destroy();
@@ -400,8 +416,8 @@
 		</div>
 
 		<!-- Summary statistics -->
-		<div class="grid grid-cols-3 gap-4 mb-4">
-			{#each [{ label: 'Depth', stats: ptdStats.depth }, { label: 'Pressure', stats: ptdStats.pressure }, { label: 'Temperature', stats: ptdStats.temperature }] as col (col.label)}
+		<div class="grid gap-4 mb-4 {isBar ? 'grid-cols-2' : 'grid-cols-3'}">
+			{#each isBar ? [{ label: 'Temperature', stats: ptdStats.temperature }, { label: 'Barometric Pressure', stats: ptdStats.barometricPressure }] : [{ label: 'Depth', stats: ptdStats.depth }, { label: 'Pressure', stats: ptdStats.pressure }, { label: 'Temperature', stats: ptdStats.temperature }] as col (col.label)}
 				<div class="border border-il-cloud rounded p-4 bg-il-storm-95">
 					<div class="font-heading font-semibold text-il-blue text-sm mb-2">{col.label}</div>
 					<div class="text-xs font-sans text-il-storm space-y-1">
@@ -441,7 +457,9 @@
 				<div class="h-80"><canvas bind:this={tempChartCanvas}></canvas></div>
 			</div>
 			<div class="border border-il-cloud rounded p-3 bg-white">
-				<div class="font-heading font-semibold text-il-blue text-sm mb-2">Depth over Time</div>
+				<div class="font-heading font-semibold text-il-blue text-sm mb-2">
+					{isBar ? 'Barometric Pressure over Time' : 'Depth over Time'}
+				</div>
 				<div class="h-80"><canvas bind:this={ptdChartCanvas}></canvas></div>
 			</div>
 		</div>
@@ -450,7 +468,7 @@
 
 {#if showPtdReview}
 	<div transition:fly={{ y: '100%', duration: 300 }} class="fixed inset-0 z-50">
-		<PtdReviewPanel records={data.ptdRecords} onclose={() => (showPtdReview = false)} />
+		<PtdReviewPanel records={data.ptdRecords} {isBar} onclose={() => (showPtdReview = false)} />
 	</div>
 {/if}
 
