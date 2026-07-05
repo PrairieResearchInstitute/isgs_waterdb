@@ -16,10 +16,15 @@ def station_visit_import_queue_sensor(context: dg.SensorEvaluationContext, postg
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, station_visit_id, uri, timestamp
-                FROM station_visit_import_queue
-                WHERE timestamp > %s
-                ORDER BY timestamp ASC
+                SELECT q.id, q.station_visit_id, q.uri, q.timestamp,
+                       lst.short_type, lsrt.logger_type
+                FROM station_visit_import_queue q
+                JOIN station_visits sv ON sv.id = q.station_visit_id
+                JOIN stations s ON s.id = sv.station_id
+                JOIN lut_station_type lst ON lst.id = s.type_id
+                LEFT JOIN lut_station_read_type lsrt ON lsrt.id = s.station_type_id
+                WHERE q.timestamp > %s
+                ORDER BY q.timestamp ASC
                 """,
                 (last_timestamp,),
             )
@@ -30,7 +35,7 @@ def station_visit_import_queue_sensor(context: dg.SensorEvaluationContext, postg
 
     run_requests = []
     latest_ts = last_timestamp
-    for row_id, station_visit_id, uri, ts in rows:
+    for row_id, station_visit_id, uri, ts, short_type, logger_type in rows:
         run_requests.append(
             dg.RunRequest(
                 run_key=str(row_id),
@@ -40,6 +45,8 @@ def station_visit_import_queue_sensor(context: dg.SensorEvaluationContext, postg
                             "config": {
                                 "station_visit_id": station_visit_id,
                                 "uri": uri,
+                                "station_type": short_type or "GW",
+                                "read_type": logger_type or "Aquatroll",
                             }
                         }
                     }
