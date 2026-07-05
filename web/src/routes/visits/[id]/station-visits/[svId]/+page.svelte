@@ -90,7 +90,7 @@
 			yLabel: string
 		) {
 			const chartData = data.ptdRecords
-				.filter((r) => toMs(r) != null && yField(r) != null)
+				.filter((r) => r.includeInReport && toMs(r) != null && yField(r) != null)
 				.map((r) => ({ x: toMs(r) as number, y: yField(r) as number }));
 
 			return new Chart(canvas, {
