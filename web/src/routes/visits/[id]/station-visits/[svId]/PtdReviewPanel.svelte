@@ -32,8 +32,12 @@
 	let maxTemp = $state<number | ''>('');
 	let maxDepth = $state<number | ''>('');
 
+	type SortKey = 'timestamp' | 'temperature' | 'barometricPressure' | 'depth';
+	let sortKey = $state<SortKey>('timestamp');
+	let sortDir = $state<'asc' | 'desc'>('asc');
+
 	let filteredRecords = $derived.by(() => {
-		return records.filter((r) => {
+		const rows = records.filter((r) => {
 			if (filterStart && r.timestamp && new Date(r.timestamp) < new Date(filterStart)) return false;
 			if (filterEnd && r.timestamp && new Date(r.timestamp) > new Date(filterEnd)) return false;
 			if (Number.isFinite(maxTemp) && r.temperature != null && r.temperature >= (maxTemp as number))
@@ -41,6 +45,25 @@
 			if (Number.isFinite(maxDepth) && r.depth != null && r.depth >= (maxDepth as number))
 				return false;
 			return true;
+		});
+		const dir = sortDir === 'asc' ? 1 : -1;
+		return rows.sort((a, b) => {
+			const av =
+				sortKey === 'timestamp'
+					? a.timestamp
+						? new Date(a.timestamp).getTime()
+						: null
+					: a[sortKey];
+			const bv =
+				sortKey === 'timestamp'
+					? b.timestamp
+						? new Date(b.timestamp).getTime()
+						: null
+					: b[sortKey];
+			if (av == null && bv == null) return 0;
+			if (av == null) return 1; // nulls last
+			if (bv == null) return -1;
+			return (av - bv) * dir;
 		});
 	});
 
@@ -81,6 +104,18 @@
 		const next = new Set(excludedIds);
 		for (const r of filteredRecords) next.delete(r.id);
 		excludedIds = next;
+	}
+
+	function toggleSort(key: SortKey) {
+		if (sortKey === key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+		else {
+			sortKey = key;
+			sortDir = 'asc';
+		}
+	}
+
+	function sortArrow(key: SortKey) {
+		return sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
 	}
 
 	function fmt(v: number | null, decimals = 3) {
@@ -201,14 +236,44 @@
 		<div class="px-3 py-2 flex items-center justify-center">
 			<span class="sr-only">Include</span>
 		</div>
-		<div class="px-3 py-2">Time</div>
+		<button
+			type="button"
+			onclick={() => toggleSort('timestamp')}
+			aria-label="Sort by time"
+			class="px-3 py-2 text-left w-full cursor-pointer hover:bg-il-blue/80"
+			>Time{sortArrow('timestamp')}</button
+		>
 		{#if isBar}
-			<div class="px-3 py-2">Barometric Pressure (PSI)</div>
-			<div class="px-3 py-2">Temperature (°C)</div>
+			<button
+				type="button"
+				onclick={() => toggleSort('barometricPressure')}
+				aria-label="Sort by barometric pressure"
+				class="px-3 py-2 text-left w-full cursor-pointer hover:bg-il-blue/80"
+				>Barometric Pressure (PSI){sortArrow('barometricPressure')}</button
+			>
+			<button
+				type="button"
+				onclick={() => toggleSort('temperature')}
+				aria-label="Sort by temperature"
+				class="px-3 py-2 text-left w-full cursor-pointer hover:bg-il-blue/80"
+				>Temperature (°C){sortArrow('temperature')}</button
+			>
 		{:else}
 			<div class="px-3 py-2">Pressure</div>
-			<div class="px-3 py-2">Temperature (°C)</div>
-			<div class="px-3 py-2">Depth (m)</div>
+			<button
+				type="button"
+				onclick={() => toggleSort('temperature')}
+				aria-label="Sort by temperature"
+				class="px-3 py-2 text-left w-full cursor-pointer hover:bg-il-blue/80"
+				>Temperature (°C){sortArrow('temperature')}</button
+			>
+			<button
+				type="button"
+				onclick={() => toggleSort('depth')}
+				aria-label="Sort by depth"
+				class="px-3 py-2 text-left w-full cursor-pointer hover:bg-il-blue/80"
+				>Depth (m){sortArrow('depth')}</button
+			>
 		{/if}
 	</div>
 
