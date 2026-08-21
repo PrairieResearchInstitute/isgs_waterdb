@@ -8,10 +8,6 @@ RUN npm ci
 
 COPY web ./
 
-# SvelteKit's post-build analysis imports server modules; db.ts throws without this
-ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
-ENV DATABASE_URL=$DATABASE_URL
-
 RUN npm run build
 
 RUN npm prune --production
