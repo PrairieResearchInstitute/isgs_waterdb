@@ -21,7 +21,9 @@ COPY web/package.json web/package-lock.json* ./
 RUN npm ci && apk add --no-cache postgresql-client
 
 COPY web/ ./
-# /data is bind-mounted at runtime via docker-compose
+# Seed files are read from /data, which is never baked into the image (data/ is
+# gitignored). Mount it at runtime: docker-compose does so via the seed service;
+# standalone, pass -v "$PWD/data:/data:ro".
 # Create a second database for execlusive use by dagster
 CMD ["sh", "-c", "(psql \"$DATABASE_URL\" -c 'CREATE DATABASE dagster' 2>&1 || true) && npm run db:push && npm run db:seed"]
 

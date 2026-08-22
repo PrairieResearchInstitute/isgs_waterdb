@@ -1,4 +1,4 @@
-name: Build and publish release image
+name: Build and publish release images
 
 on:
   release:
@@ -14,9 +14,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: linux/amd64
+          # The seeder image ships the schema push + seed script only; the
+          # NDJSON in data/ is gitignored, so it must be mounted at /data
+          # when the container runs.
+          - variant: runtime
+            suffix: ''
+            platform: linux/amd64
             runner: ubuntu-latest
-          - platform: linux/arm64
+          - variant: runtime
+            suffix: ''
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - variant: seeder
+            suffix: -seed
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - variant: seeder
+            suffix: -seed
+            platform: linux/arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -48,11 +63,11 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          target: runtime
+          target: ${{ matrix.variant }}
           platforms: ${{ matrix.platform }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ env.PLATFORM_SLUG }}
-          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_SLUG }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.suffix }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.variant }}-${{ env.PLATFORM_SLUG }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ env.PLATFORM_SLUG }}
 
       - name: Export digest
         run: |
@@ -63,13 +78,21 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ env.PLATFORM_SLUG }}
+          name: digests-${{ matrix.variant }}-${{ env.PLATFORM_SLUG }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
   merge:
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: runtime
+            suffix: ''
+          - variant: seeder
+            suffix: -seed
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -80,7 +103,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-*
+          pattern: digests-${{ matrix.variant }}-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
@@ -97,12 +120,14 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           docker buildx imagetools create \
-            --tag "$REGISTRY/$IMAGE_NAME:$RELEASE_TAG" \
-            $(printf "$REGISTRY/$IMAGE_NAME@sha256:%s " *)
+            --tag "$REGISTRY/$IMAGE_NAME$IMAGE_SUFFIX:$RELEASE_TAG" \
+            $(printf "$REGISTRY/$IMAGE_NAME$IMAGE_SUFFIX@sha256:%s " *)
         env:
+          IMAGE_SUFFIX: ${{ matrix.suffix }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
 
       - name: Inspect manifest
-        run: docker buildx imagetools inspect "$REGISTRY/$IMAGE_NAME:$RELEASE_TAG"
+        run: docker buildx imagetools inspect "$REGISTRY/$IMAGE_NAME$IMAGE_SUFFIX:$RELEASE_TAG"
         env:
+          IMAGE_SUFFIX: ${{ matrix.suffix }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
