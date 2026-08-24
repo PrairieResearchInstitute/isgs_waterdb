@@ -11,9 +11,19 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "dagster-dg-cli",
+# Everything the deployed image needs on top of [project.dependencies]: the UI,
+# Postgres-backed instance storage, and the Docker run launcher. Each of these
+# hard-pins dagster==1.13.6 itself, so leaving them unpinned keeps the version
+# bump in one place. Built into the image with:
+#   uv sync --locked --no-default-groups --group deploy
+deploy = [
     "dagster-webserver",
+    "dagster-postgres",
+    "dagster-docker",
+]
+dev = [
+    { include-group = "deploy" },
+    "dagster-dg-cli",
     "pytest>=8",
 ]
 
@@ -29,8 +39,3 @@ directory_type = "project"
 
 [tool.dg.project]
 root_module = "isgs_dagster"
-registry_modules = [
-    "isgs_dagster.components.*",
-]
-
-

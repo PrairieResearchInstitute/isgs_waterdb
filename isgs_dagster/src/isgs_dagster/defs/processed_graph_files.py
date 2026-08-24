@@ -1,4 +1,5 @@
 import io
+import os
 from pathlib import Path
 
 import dagster as dg
@@ -10,7 +11,11 @@ BUCKET = "graphing-data"
 ROOT_PREFIX = ""   # everything lives under here
 WATER_TABLE_THRESHOLD_M = 0.3048  # 1 ft, in meters
 REPO_ROOT = Path(__file__).resolve().parents[4]
-SCRATCH_DIR = REPO_ROOT / "scratch"
+# In a container the source tree sits at /app/src, so parents[4] is "/" and the
+# default would be a bare /scratch. ISGS_SCRATCH_DIR makes the location explicit
+# instead of an accident of directory depth; the image sets it to /scratch, which
+# the deployment mounts as a volume into run containers.
+SCRATCH_DIR = Path(os.environ.get("ISGS_SCRATCH_DIR", REPO_ROOT / "scratch"))
 
 folder_partitions = dg.DynamicPartitionsDefinition(name="s3_date_range_folders")
 

@@ -201,3 +201,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Ephemeral DAGSTER_HOME dirs created by `dg dev`
+.tmp_dagster_home_*

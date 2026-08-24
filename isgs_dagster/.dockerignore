@@ -1,0 +1,11 @@
+# The build context is ./isgs_dagster, so the repo-root .accdb files are already
+# out of scope. What remains to exclude is the 433MB local virtualenv and the
+# throwaway DAGSTER_HOME dirs that `dg dev` leaves behind.
+.venv
+.env
+.tmp_dagster_home_*
+.pytest_cache
+.dg
+__pycache__
+*.py[cod]
+tests
