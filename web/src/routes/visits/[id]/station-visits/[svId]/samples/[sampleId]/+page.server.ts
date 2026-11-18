@@ -8,6 +8,7 @@ import {
 	sondeImportQueue,
 	sondeData
 } from '$lib/server/schema';
+import { latestVersionOf, stationVersion } from '$lib/server/stations';
 import { eq, asc } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
@@ -28,7 +29,8 @@ export const load: PageServerLoad = async ({ params }) => {
 				siteName: sites.idotName
 			})
 			.from(stationVisits)
-			.leftJoin(stations, eq(stationVisits.stationId, stations.id))
+			.leftJoin(stationVersion, eq(stationVisits.stationId, stationVersion.id))
+			.leftJoin(stations, latestVersionOf(stationVersion))
 			.leftJoin(visits, eq(stationVisits.visitId, visits.id))
 			.leftJoin(sites, eq(visits.siteId, sites.id))
 			.where(eq(stationVisits.id, svId))

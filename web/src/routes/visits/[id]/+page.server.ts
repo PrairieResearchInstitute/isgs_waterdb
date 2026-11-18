@@ -9,6 +9,7 @@ import {
 	lutStatus,
 	samples
 } from '$lib/server/schema';
+import { latestVersionOf, stationVersion } from '$lib/server/stations';
 import { eq, asc } from 'drizzle-orm';
 import { error, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
@@ -51,7 +52,8 @@ export const load: PageServerLoad = async ({ params }) => {
 				notes: stationVisits.notes
 			})
 			.from(stationVisits)
-			.leftJoin(stations, eq(stationVisits.stationId, stations.id))
+			.leftJoin(stationVersion, eq(stationVisits.stationId, stationVersion.id))
+			.leftJoin(stations, latestVersionOf(stationVersion))
 			.leftJoin(lutStationType, eq(stations.typeId, lutStationType.id))
 			.leftJoin(lutStatus, eq(stationVisits.statusId, lutStatus.id))
 			.where(eq(stationVisits.visitId, id))
@@ -70,7 +72,8 @@ export const load: PageServerLoad = async ({ params }) => {
 			})
 			.from(samples)
 			.leftJoin(stationVisits, eq(samples.stationVisitId, stationVisits.id))
-			.leftJoin(stations, eq(stationVisits.stationId, stations.id))
+			.leftJoin(stationVersion, eq(stationVisits.stationId, stationVersion.id))
+			.leftJoin(stations, latestVersionOf(stationVersion))
 			.where(eq(samples.visitId, id))
 			.orderBy(asc(samples.sampleName))
 	]);

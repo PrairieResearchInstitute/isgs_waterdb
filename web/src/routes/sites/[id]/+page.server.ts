@@ -14,7 +14,8 @@ import {
 	lutBoringMethod
 } from '$lib/server/schema';
 import { createVisitWithStations } from '$lib/server/visitHelpers';
-import { desc, eq } from 'drizzle-orm';
+import { isCurrent } from '$lib/server/stations';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -109,7 +110,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			.leftJoin(lutStationUnits, eq(stations.instUnitsId, lutStationUnits.id))
 			.leftJoin(lutStationReadType, eq(stations.stationTypeId, lutStationReadType.id))
 			.leftJoin(lutBoringMethod, eq(stations.borMethodId, lutBoringMethod.id))
-			.where(eq(stations.siteId, id))
+			.where(and(eq(stations.siteId, id), isCurrent()))
 			.orderBy(stations.staName),
 		db.select().from(lutStationType).orderBy(lutStationType.type),
 		db.select().from(lutLocationType).orderBy(lutLocationType.locationType),
@@ -192,12 +193,14 @@ export const actions: Actions = {
 		const latRaw = (data.get('latitude') as string)?.trim();
 		const lngRaw = (data.get('longitude') as string)?.trim();
 
+		const code = ((data.get('code') as string) ?? '').trim();
+		if (!stationId && !code) return fail(400, { error: 'Code is required' });
+
 		const values = {
 			siteId,
 			staName,
 			typeId: parseInt(typeIdRaw),
 			initials,
-			code: (data.get('code') as string) || null,
 			beginDt: (data.get('beginDt') as string) || null,
 			endDt: (data.get('endDt') as string) || null,
 			labelAlt: (data.get('labelAlt') as string) || null,
@@ -224,9 +227,40 @@ export const actions: Actions = {
 		};
 
 		if (stationId) {
-			await db.update(stations).set(values).where(eq(stations.id, stationId));
+			// Close the current version and insert a new one. now() is fixed for the whole
+			// transaction, so the old valid_to equals the new valid_from exactly. The code is
+			// the station's durable key and is carried over from the version being edited.
+			const superseded = await db.transaction(async (tx) => {
+				const closed = await tx
+					.update(stations)
+					.set({ validTo: sql`now()` })
+					.where(and(eq(stations.id, stationId), eq(stations.siteId, siteId), isCurrent()))
+					.returning({ code: stations.code });
+				if (closed.length === 0) return false;
+				await tx
+					.insert(stations)
+					.values({ ...values, code: closed[0].code, validFrom: sql`now()`, validTo: 'infinity' });
+				return true;
+			});
+			if (!superseded) {
+				return fail(409, {
+					error: 'This station was changed or deleted since you opened it. Reload and try again.'
+				});
+			}
 		} else {
-			await db.insert(stations).values(values);
+			// Codes are never reused at a site, including codes of retired stations, so that
+			// every version of a station can be found by (site_id, code).
+			const existing = await db
+				.select({ id: stations.id })
+				.from(stations)
+				.where(and(eq(stations.siteId, siteId), eq(stations.code, code)))
+				.limit(1);
+			if (existing.length > 0) {
+				return fail(400, { error: `Code "${code}" is already used by a station at this site` });
+			}
+			await db
+				.insert(stations)
+				.values({ ...values, code, validFrom: sql`now()`, validTo: 'infinity' });
 		}
 
 		redirect(303, `/sites/${siteId}`);
@@ -237,7 +271,11 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const stationId = parseInt(data.get('stationId') as string);
 		if (!isNaN(stationId)) {
-			await db.delete(stations).where(eq(stations.id, stationId));
+			// Retire the station: close its current version and keep its history and visits.
+			await db
+				.update(stations)
+				.set({ validTo: sql`now()` })
+				.where(and(eq(stations.id, stationId), eq(stations.siteId, siteId), isCurrent()));
 		}
 		redirect(303, `/sites/${siteId}`);
 	},

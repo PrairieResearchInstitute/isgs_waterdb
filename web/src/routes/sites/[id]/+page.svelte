@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { PageData } from './$types';
+	import type { ActionData, PageData } from './$types';
 	import { enhance } from '$app/forms';
 	import { closeOnSuccess } from '$lib/forms';
 	import { formatDate } from '$lib/format';
@@ -10,7 +10,7 @@
 	import TextareaField from '$lib/components/TextareaField.svelte';
 	import TableHeader from '$lib/components/TableHeader.svelte';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let dialogOpen = $state(false);
 	let stationDialogOpen = $state(false);
@@ -296,7 +296,17 @@
 			required
 			value={editingStation?.staName ?? ''}
 		/>
-		<TextField id="stationCode" name="code" label="Code" value={editingStation?.code ?? ''} />
+		<!-- Code is the station's durable key (with the site), so it can't change after creation. -->
+		<TextField
+			id="stationCode"
+			name="code"
+			label="Code"
+			required
+			readonly={editingStation !== null}
+			title={editingStation ? 'Code identifies the station and cannot be changed' : undefined}
+			inputClass="read-only:bg-il-storm-95 read-only:cursor-not-allowed"
+			value={editingStation?.code ?? ''}
+		/>
 
 		<SelectField
 			id="stationTypeId"
@@ -442,6 +452,10 @@
 			inputClass="resize-none"
 		/>
 
+		{#if form?.error}
+			<p class="col-span-2 text-sm font-sans text-il-orange" role="alert">{form.error}</p>
+		{/if}
+
 		<!-- Form actions -->
 		<div class="col-span-2 flex items-center justify-end gap-3 pt-2 border-t border-il-cloud mt-1">
 			<Button variant="secondary" onclick={() => (stationDialogOpen = false)}>Cancel</Button>
@@ -459,7 +473,12 @@
 					type="submit"
 					variant="danger"
 					onclick={(e) => {
-						if (!confirm('Delete this station? This cannot be undone.')) e.preventDefault();
+						if (
+							!confirm(
+								'Delete this station? It will be removed from this site; its history and past visits are kept.'
+							)
+						)
+							e.preventDefault();
 					}}
 				>
 					Delete Station

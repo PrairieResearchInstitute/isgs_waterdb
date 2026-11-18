@@ -10,8 +10,12 @@ import {
 	timestamp,
 	varchar,
 	boolean,
-	foreignKey
+	foreignKey,
+	index,
+	uniqueIndex,
+	check
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const lutSiteType = pgTable('lut_site_type', {
 	id: integer('id').primaryKey(),
@@ -99,33 +103,53 @@ export const lutStatus = pgTable('lut_status', {
 	status: text('status').notNull()
 });
 
-export const stations = pgTable('stations', {
-	id: serial('id').primaryKey(),
-	siteId: integer('site_id')
-		.notNull()
-		.references(() => sites.id),
-	typeId: integer('type_id')
-		.notNull()
-		.references(() => lutStationType.id),
-	code: text('code'),
-	beginDt: text('begin_dt'),
-	endDt: text('end_dt'),
-	staName: text('sta_name').notNull(),
-	labelAlt: text('label_alt'),
-	longitude: doublePrecision('longitude'),
-	latitude: doublePrecision('latitude'),
-	locationTypeId: integer('location_type_id').references(() => lutLocationType.id),
-	initials: text('initials')
-		.notNull()
-		.references(() => lutcInitials.initials),
-	instTypeId: integer('inst_type_id').references(() => lutStationInstType.id),
-	instUnitsId: integer('inst_units_id').references(() => lutStationUnits.id),
-	stationTypeId: integer('station_type_id').references(() => lutStationReadType.id),
-	isgsId: text('isgs_id'),
-	borDt: text('bor_dt'),
-	borMethodId: integer('bor_method_id').references(() => lutBoringMethod.id),
-	comment: text('comment')
-});
+// Slowly changing dimension (type 2): each edit inserts a new version row. All versions of
+// a station share the durable key (site_id, code); the current version has
+// valid_to = 'infinity'. `id` identifies a single version.
+export const stations = pgTable(
+	'stations',
+	{
+		id: serial('id').primaryKey(),
+		siteId: integer('site_id')
+			.notNull()
+			.references(() => sites.id),
+		typeId: integer('type_id')
+			.notNull()
+			.references(() => lutStationType.id),
+		code: text('code').notNull(),
+		beginDt: text('begin_dt'),
+		endDt: text('end_dt'),
+		staName: text('sta_name').notNull(),
+		labelAlt: text('label_alt'),
+		longitude: doublePrecision('longitude'),
+		latitude: doublePrecision('latitude'),
+		locationTypeId: integer('location_type_id').references(() => lutLocationType.id),
+		initials: text('initials')
+			.notNull()
+			.references(() => lutcInitials.initials),
+		instTypeId: integer('inst_type_id').references(() => lutStationInstType.id),
+		instUnitsId: integer('inst_units_id').references(() => lutStationUnits.id),
+		stationTypeId: integer('station_type_id').references(() => lutStationReadType.id),
+		isgsId: text('isgs_id'),
+		borDt: text('bor_dt'),
+		borMethodId: integer('bor_method_id').references(() => lutBoringMethod.id),
+		comment: text('comment'),
+		// String mode: a JS Date cannot represent Postgres 'infinity'.
+		validFrom: timestamp('valid_from', { withTimezone: true, mode: 'string' })
+			.notNull()
+			.defaultNow(),
+		validTo: timestamp('valid_to', { withTimezone: true, mode: 'string' })
+			.notNull()
+			.default(sql`'infinity'`)
+	},
+	(table) => [
+		uniqueIndex('stations_current_site_code_uq')
+			.on(table.siteId, table.code)
+			.where(sql`valid_to = 'infinity'`),
+		index('stations_site_code_valid_to_idx').on(table.siteId, table.code, table.validTo),
+		check('stations_valid_range_chk', sql`${table.validFrom} < ${table.validTo}`)
+	]
+);
 
 export type LutSiteType = typeof lutSiteType.$inferSelect;
 export type LutCountyName = typeof lutCountyNames.$inferSelect;

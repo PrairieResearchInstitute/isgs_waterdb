@@ -259,11 +259,35 @@ async function main() {
 		Comment?: string;
 	};
 	const stationRows = parseNdjson<RawStation>(`${dataDir}/Stations.json`);
+
+	// Stations are a slowly changing dimension keyed by (site_id, code), so a code may be
+	// used by only one current station per site. The source data reuses some codes at a site
+	// for stations of different types: the lowest ID keeps the code, and later duplicates get
+	// `${code}-${typeId}`. Missing codes fall back to the station ID.
+	const stationCodes = new Map<number, string>();
+	const usedCodes = new Set<string>();
+	for (const r of [...stationRows].sort((a, b) => a.ID - b.ID)) {
+		let code = r.Code?.trim() || String(r.ID);
+		if (usedCodes.has(`${r.ProjectID}|${code}`)) {
+			const renamed = `${code}-${r.TypeID}`;
+			console.warn(
+				`Station ${r.ID}: code "${code}" already used at site ${r.ProjectID}; using "${renamed}"`
+			);
+			code = renamed;
+		}
+		usedCodes.add(`${r.ProjectID}|${code}`);
+		stationCodes.set(r.ID, code);
+	}
+
+	// Every seeded station is a single, currently valid version.
+	const seededAt = new Date().toISOString();
 	const stationValues = stationRows.map((r) => ({
 		id: r.ID,
 		siteId: r.ProjectID,
 		typeId: r.TypeID,
-		code: r.Code ?? null,
+		code: stationCodes.get(r.ID)!,
+		validFrom: seededAt,
+		validTo: 'infinity',
 		beginDt: parseDate(r.BeginDT),
 		endDt: parseDate(r.EndDT),
 		staName: r.StaName,

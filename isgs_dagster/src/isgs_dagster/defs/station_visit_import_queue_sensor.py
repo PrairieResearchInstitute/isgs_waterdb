@@ -20,7 +20,14 @@ def station_visit_import_queue_sensor(context: dg.SensorEvaluationContext, postg
                        lst.short_type, lsrt.logger_type
                 FROM station_visit_import_queue q
                 JOIN station_visits sv ON sv.id = q.station_visit_id
-                JOIN stations s ON s.id = sv.station_id
+                -- stations is a slowly changing dimension: resolve the visit's station
+                -- version to the latest version of that station (durable key site_id, code).
+                JOIN stations v ON v.id = sv.station_id
+                JOIN stations s ON s.site_id = v.site_id AND s.code = v.code
+                    AND s.valid_to = (
+                        SELECT max(s2.valid_to) FROM stations s2
+                        WHERE s2.site_id = v.site_id AND s2.code = v.code
+                    )
                 JOIN lut_station_type lst ON lst.id = s.type_id
                 LEFT JOIN lut_station_read_type lsrt ON lsrt.id = s.station_type_id
                 WHERE q.timestamp > %s
